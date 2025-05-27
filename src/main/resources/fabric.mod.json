@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "beaconrange",
+  "version": "${version}",
+  "name": "beaconrange",
+  "description": "Client-side mod to visualize beacon's effect range.  ",
+  "authors": [],
+  "contact": {},
+  "license": "All-Rights-Reserved",
+  "icon": "assets/beaconrange/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "client": [
+      "org.sam.beaconrange.client.BeaconrangeClient"
+    ],
+    "main": [
+      "org.sam.beaconrange.Beaconrange"
+    ]
+  },
+  "mixins": [
+    "beaconrange.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}
