@@ -4,8 +4,10 @@
   "package": "org.sam.beaconrange.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "BeaconBlockEntityAccessor"
   ],
   "client": [
+    "MixinBeaconBlockEntityRenderer"
   ],
   "injectors": {
     "defaultRequire": 1
