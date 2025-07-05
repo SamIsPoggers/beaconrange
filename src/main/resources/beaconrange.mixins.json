@@ -1,0 +1,18 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "io.github.samispoggers.beaconrange.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "BeaconBlockEntityAccessor"
+  ],
+  "client": [
+    "MixinBeaconBlockEntityRenderer"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
+  }
+}

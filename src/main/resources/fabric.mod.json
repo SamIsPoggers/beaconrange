@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "beaconrange",
+  "version": "${version}",
+  "name": "Beacon Bounding Boxes",
+  "description": "Beacon Bounding Boxes",
+  "authors": [],
+  "contact": {},
+  "license": "All-Rights-Reserved",
+  "icon": "assets/beaconrange/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "client": [
+      "io.github.samispoggers.beaconrange.client.BeaconRangeClient"
+    ],
+    "main": [
+      "io.github.samispoggers.beaconrange.BeaconRange"
+    ]
+  },
+  "mixins": [
+    "beaconrange.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}
