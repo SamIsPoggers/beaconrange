@@ -15,6 +15,9 @@
     ],
     "main": [
       "io.github.samispoggers.beaconrange.BeaconRange"
+    ],
+    "modmenu": [
+      "io.github.samispoggers.beaconrange.config.ModMenuIntegration"
     ]
   },
   "mixins": [
@@ -24,5 +27,12 @@
     "fabricloader": ">=${loader_version}",
     "fabric": "*",
     "minecraft": "${minecraft_version}"
+  },
+  "custom": {
+    "modmenu": {
+      "links": {
+        "beaconrange.discord": "https://discord.com/invite/VHUpFcEeuH"
+      }
+    }
   }
 }

@@ -1,18 +1,22 @@
 package io.github.samispoggers.beaconrange.mixin;
 
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import io.github.samispoggers.beaconrange.client.BeaconRangeClient;
+import io.github.samispoggers.beaconrange.config.ConfigManager;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.block.entity.BeaconBlockEntity;
 import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.render.VertexConsumerProvider;
+import net.minecraft.client.gl.RenderPipelines;
+import net.minecraft.client.render.*;
 import net.minecraft.client.render.block.entity.BeaconBlockEntityRenderer;
-import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
+import org.jetbrains.annotations.NotNull;
 import org.joml.Vector3f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -22,11 +26,28 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.OptionalDouble;
 import java.util.Random;
+import java.util.function.Function;
+
+import static net.minecraft.client.gl.RenderPipelines.RENDERTYPE_LINES_SNIPPET;
+import static net.minecraft.client.render.RenderPhase.ITEM_ENTITY_TARGET;
+import static net.minecraft.client.render.RenderPhase.VIEW_OFFSET_Z_LAYERING;
 
 @Environment(EnvType.CLIENT)
 @Mixin(BeaconBlockEntityRenderer.class)
 public abstract class MixinBeaconBlockEntityRenderer {
+
+    @Unique
+    RenderPipeline pipeline = RenderPipelines.register(RenderPipeline.builder(
+                    RENDERTYPE_LINES_SNIPPET).withLocation("pipeline/custom_line").withVertexShader("core/position_color")
+            .withFragmentShader("core/position_color").withCull(false).withVertexFormat(VertexFormats.POSITION_COLOR, VertexFormat.DrawMode.DEBUG_LINES)
+            .build()
+    );
+
+    @Unique
+    Function<Double, RenderLayer.MultiPhase> phase = Util.memoize((lineWidth) -> RenderLayer.of("debug_lines", 1536, pipeline,
+            RenderLayer.MultiPhaseParameters.builder().lineWidth(new RenderPhase.LineWidth(OptionalDouble.of(lineWidth))).layering(VIEW_OFFSET_Z_LAYERING).target(ITEM_ENTITY_TARGET).build(false)));
 
     @Unique
     private final Map<BlockPos, Vector3f> beaconColors = new HashMap<>();
@@ -35,7 +56,7 @@ public abstract class MixinBeaconBlockEntityRenderer {
             at = @At("HEAD"))
     private void onRenderBeacon(BlockEntity entity, float tickDelta, MatrixStack matrices,
                                 VertexConsumerProvider vertexConsumers, int light, int overlay, Vec3d cameraPos, CallbackInfo ci) {
-        if (entity instanceof BeaconBlockEntity beacon && BeaconRangeClient.myToggleVariable) {
+        if (entity instanceof BeaconBlockEntity beacon && BeaconRangeClient.myToggleBeaconVariable) {
             renderBoundingBox(beacon, matrices, vertexConsumers);
         }
     }
@@ -44,61 +65,38 @@ public abstract class MixinBeaconBlockEntityRenderer {
     private void renderBoundingBox(BeaconBlockEntity beacon, MatrixStack matrices, VertexConsumerProvider vertexConsumers) {
         BlockPos blockPos = beacon.getPos();
 
+        // Deterministic color per beacon
         Vector3f color = beaconColors.computeIfAbsent(blockPos, p -> {
-            Random random = new Random(p.asLong()); // Deterministic color per beacon
+            Random random = new Random(p.asLong());
             return new Vector3f(random.nextFloat(), random.nextFloat(), random.nextFloat());
         });
 
         int level = ((BeaconBlockEntityAccessor) beacon).getLevel();
         if (level <= 0) return;
 
-        int[] levelRanges = {0, 20, 30, 40, 50}; // Beacon range by level
-        int range = levelRanges[Math.min(level, 4)];
+        Box box = getBox(beacon, level);
 
-        Vec3d min = new Vec3d(-range, -range, -range);
-        Vec3d max = new Vec3d(range + 1, range + 1, range + 1);
-        Box box = new Box(min, max);
+        // Use lines render layer - should not create connecting diagonals
+        VertexConsumer buffer = vertexConsumers.getBuffer(phase.apply(2.0));
 
-        VertexConsumer buffer = vertexConsumers.getBuffer(RenderLayer.getLines());
-
-        drawBoxOutline(matrices, buffer, box, color.x(), color.y(), color.z());
+        VertexRendering.drawBox(matrices, buffer, box, color.x(), color.y(), color.z(), 1.0f);
     }
 
-    /**
-     * Renders a simple line box outline using the provided VertexConsumer.
-     */
     @Unique
-    private void drawBoxOutline(MatrixStack matrices, VertexConsumer buffer, Box box, float r, float g, float b) {
-        MatrixStack.Entry entry = matrices.peek();
+    private static @NotNull Box getBox(BeaconBlockEntity beacon, int level) {
+        int[] levelRanges = {0, 20, 30, 40, 50}; // Example ranges by level
+        int range = levelRanges[Math.min(level, levelRanges.length - 1)];
 
-        // 12 edges of the box (each with two points)
-        Vec3d[] corners = {
-                new Vec3d(box.minX, box.minY, box.minZ),
-                new Vec3d(box.maxX, box.minY, box.minZ),
-                new Vec3d(box.minX, box.maxY, box.minZ),
-                new Vec3d(box.maxX, box.maxY, box.minZ),
-                new Vec3d(box.minX, box.minY, box.maxZ),
-                new Vec3d(box.maxX, box.minY, box.maxZ),
-                new Vec3d(box.minX, box.maxY, box.maxZ),
-                new Vec3d(box.maxX, box.maxY, box.maxZ),
+        // Determine height depending on config
+        int yMin = -range;
+        int yMax = switch (ConfigManager.config.heightMode) {
+            case world -> 319 - beacon.getPos().getY();
+            case custom -> ConfigManager.config.customYLevel - beacon.getPos().getY();
+            default -> range + 1;
         };
 
-        int[][] lines = {
-                {0, 1}, {1, 3}, {3, 2}, {2, 0},
-                {4, 5}, {5, 7}, {7, 6}, {6, 4},
-                {0, 4}, {1, 5}, {2, 6}, {3, 7}
-        };
-
-        for (int[] line : lines) {
-            Vec3d start = corners[line[0]];
-            Vec3d end = corners[line[1]];
-
-            buffer.vertex(entry.getPositionMatrix(), (float) start.x, (float) start.y, (float) start.z)
-                    .color(r, g, b, (float) 1.0)
-                    .normal(0.0F, 1.0F, 0.0F);
-            buffer.vertex(entry.getPositionMatrix(), (float) end.x, (float) end.y, (float) end.z)
-                    .color(r, g, b, (float) 1.0)
-                    .normal(0.0F, 1.0F, 0.0F);
-        }
+        Vec3d min = new Vec3d(-range, yMin, -range);
+        Vec3d max = new Vec3d(range + 1, yMax, range + 1);
+        return new Box(min, max);
     }
 }

@@ -4,10 +4,12 @@
   "package": "io.github.samispoggers.beaconrange.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "BeaconBlockEntityAccessor"
+    "BeaconBlockEntityAccessor",
+    "ConduitBlockEntityAccessor"
   ],
   "client": [
-    "MixinBeaconBlockEntityRenderer"
+    "MixinBeaconBlockEntityRenderer",
+    "MixinConduitBlockEntityRenderer"
   ],
   "injectors": {
     "defaultRequire": 1

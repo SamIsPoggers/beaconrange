@@ -11,28 +11,54 @@ import org.lwjgl.glfw.GLFW;
 
 public class BeaconRangeClient implements ClientModInitializer {
 
-    private static KeyBinding toggleKey;
-    public static boolean myToggleVariable = false;
+    private static KeyBinding toggleBeaconKey;
+    private static KeyBinding toggleConduitKey;
+    public static boolean myToggleBeaconVariable = false;
+    public static boolean myToggleConduitVariable = false;
 
     @Override
     public void onInitializeClient() {
         // Register the keybinding (e.g., key G)
-        toggleKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.beaconrange.toggle",
+        toggleBeaconKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.beaconrange.toggle_beacon",
                 InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_G,
                 "category.beaconrange"
         ));
 
+        // Register the keybinding (e.g., key G)
+        toggleConduitKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.beaconrange.toggle_conduit",
+                InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_H,
+                "category.beaconrange"
+        ));
+
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            while (toggleKey.wasPressed()) {
-                myToggleVariable = !myToggleVariable;
+            while (toggleBeaconKey.wasPressed()) {
+                myToggleBeaconVariable = !myToggleBeaconVariable;
 
                 // Build the colored message
                 Text message = Text.literal("Beacon Bounding Boxes are now ")
                         .formatted(Formatting.GRAY)
-                        .append(Text.literal(myToggleVariable ? "ON" : "OFF")
-                                .formatted(myToggleVariable ? Formatting.GREEN : Formatting.RED)
+                        .append(Text.literal(myToggleBeaconVariable ? "ON" : "OFF")
+                                .formatted(myToggleBeaconVariable ? Formatting.GREEN : Formatting.RED)
+                        );
+
+                // Send to action bar
+                if (client.player != null) {
+                    client.player.sendMessage(message, true); // `true` sends to action bar
+                }
+            }
+
+            while (toggleConduitKey.wasPressed()) {
+                myToggleConduitVariable = !myToggleConduitVariable;
+
+                // Build the colored message
+                Text message = Text.literal("Conduit Bounding Boxes are now ")
+                        .formatted(Formatting.GRAY)
+                        .append(Text.literal(myToggleConduitVariable ? "ON" : "OFF")
+                                .formatted(myToggleConduitVariable ? Formatting.GREEN : Formatting.RED)
                         );
 
                 // Send to action bar
