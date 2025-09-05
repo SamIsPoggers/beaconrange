@@ -4,6 +4,7 @@ import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import io.github.samispoggers.beaconrange.client.BeaconRangeClient;
 import io.github.samispoggers.beaconrange.config.ConfigManager;
+import io.github.samispoggers.beaconrange.config.ModConfig;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.block.entity.BeaconBlockEntity;
@@ -12,7 +13,6 @@ import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.render.*;
 import net.minecraft.client.render.block.entity.BeaconBlockEntityRenderer;
 import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
@@ -26,28 +26,32 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.OptionalDouble;
 import java.util.Random;
-import java.util.function.Function;
-
-import static net.minecraft.client.gl.RenderPipelines.RENDERTYPE_LINES_SNIPPET;
-import static net.minecraft.client.render.RenderPhase.ITEM_ENTITY_TARGET;
-import static net.minecraft.client.render.RenderPhase.VIEW_OFFSET_Z_LAYERING;
 
 @Environment(EnvType.CLIENT)
 @Mixin(BeaconBlockEntityRenderer.class)
 public abstract class MixinBeaconBlockEntityRenderer {
 
     @Unique
-    RenderPipeline pipeline = RenderPipelines.register(RenderPipeline.builder(
-                    RENDERTYPE_LINES_SNIPPET).withLocation("pipeline/custom_line").withVertexShader("core/position_color")
-            .withFragmentShader("core/position_color").withCull(false).withVertexFormat(VertexFormats.POSITION_COLOR, VertexFormat.DrawMode.DEBUG_LINES)
-            .build()
-    );
+    private static final RenderPipeline TRANSLUCENT_BOX_PIPELINE =
+            RenderPipeline.builder(RenderPipelines.POSITION_COLOR_SNIPPET)
+                    .withLocation("pipeline/translucent_box")
+                    .withVertexFormat(VertexFormats.POSITION_COLOR, VertexFormat.DrawMode.QUADS)
+                    .withCull(false)
+                    .withDepthWrite(false)
+                    .build();
 
     @Unique
-    Function<Double, RenderLayer.MultiPhase> phase = Util.memoize((lineWidth) -> RenderLayer.of("debug_lines", 1536, pipeline,
-            RenderLayer.MultiPhaseParameters.builder().lineWidth(new RenderPhase.LineWidth(OptionalDouble.of(lineWidth))).layering(VIEW_OFFSET_Z_LAYERING).target(ITEM_ENTITY_TARGET).build(false)));
+    private static final RenderLayer TRANSLUCENT_BOX = RenderLayer.of(
+            "beaconrange:translucent_box",
+            1536,
+            false,
+            true,
+            TRANSLUCENT_BOX_PIPELINE,
+            RenderLayer.MultiPhaseParameters.builder()
+                    .layering(RenderLayer.VIEW_OFFSET_Z_LAYERING)
+                    .build(false)
+    );
 
     @Unique
     private final Map<BlockPos, Vector3f> beaconColors = new HashMap<>();
@@ -76,18 +80,28 @@ public abstract class MixinBeaconBlockEntityRenderer {
 
         Box box = getBox(beacon, level);
 
-        // Use lines render layer - should not create connecting diagonals
-        VertexConsumer buffer = vertexConsumers.getBuffer(phase.apply(2.0));
+        matrices.push();
+        matrices.translate(0.5, 0.5, 0.5); // Center on the beacon block
 
-        VertexRendering.drawBox(matrices, buffer, box, color.x(), color.y(), color.z(), 1.0f);
+        if (ConfigManager.config.boxMode.equals(ModConfig.BoxMode.box)) {
+            // First render translucent faces
+            VertexConsumer faceBuffer = vertexConsumers.getBuffer(TRANSLUCENT_BOX);
+            drawBoxFaces(matrices, faceBuffer, box, color.x(), color.y(), color.z(), 0.3f);
+        }
+
+        // Then render the outline on top
+        VertexConsumer lineBuffer = vertexConsumers.getBuffer(RenderLayer.getLines());
+        VertexRendering.drawBox(matrices, lineBuffer, box, color.x(), color.y(), color.z(), 1.0f);
+
+        matrices.pop();
     }
 
     @Unique
     private static @NotNull Box getBox(BeaconBlockEntity beacon, int level) {
-        int[] levelRanges = {0, 20, 30, 40, 50}; // Example ranges by level
+        // Vanilla ranges
+        int[] levelRanges = {0, 20, 30, 40, 50};
         int range = levelRanges[Math.min(level, levelRanges.length - 1)];
 
-        // Determine height depending on config
         int yMin = -range;
         int yMax = switch (ConfigManager.config.heightMode) {
             case world -> 319 - beacon.getPos().getY();
@@ -98,5 +112,62 @@ public abstract class MixinBeaconBlockEntityRenderer {
         Vec3d min = new Vec3d(-range, yMin, -range);
         Vec3d max = new Vec3d(range + 1, yMax, range + 1);
         return new Box(min, max);
+    }
+
+    @Unique
+    private void drawBoxFaces(MatrixStack matrices, VertexConsumer buffer, Box box,
+                              float r, float g, float b, float a) {
+        MatrixStack.Entry entry = matrices.peek();
+
+        float minX = (float) box.minX;
+        float minY = (float) box.minY;
+        float minZ = (float) box.minZ;
+        float maxX = (float) box.maxX;
+        float maxY = (float) box.maxY;
+        float maxZ = (float) box.maxZ;
+
+        // bottom (y = minY)
+        addVertex(buffer, entry, minX, minY, minZ, r, g, b, a, 0, -1, 0);
+        addVertex(buffer, entry, maxX, minY, minZ, r, g, b, a, 0, -1, 0);
+        addVertex(buffer, entry, maxX, minY, maxZ, r, g, b, a, 0, -1, 0);
+        addVertex(buffer, entry, minX, minY, maxZ, r, g, b, a, 0, -1, 0);
+
+        // top (y = maxY)
+        addVertex(buffer, entry, minX, maxY, minZ, r, g, b, a, 0, 1, 0);
+        addVertex(buffer, entry, minX, maxY, maxZ, r, g, b, a, 0, 1, 0);
+        addVertex(buffer, entry, maxX, maxY, maxZ, r, g, b, a, 0, 1, 0);
+        addVertex(buffer, entry, maxX, maxY, minZ, r, g, b, a, 0, 1, 0);
+
+        // north (z = minZ)
+        addVertex(buffer, entry, minX, minY, minZ, r, g, b, a, 0, 0, -1);
+        addVertex(buffer, entry, minX, maxY, minZ, r, g, b, a, 0, 0, -1);
+        addVertex(buffer, entry, maxX, maxY, minZ, r, g, b, a, 0, 0, -1);
+        addVertex(buffer, entry, maxX, minY, minZ, r, g, b, a, 0, 0, -1);
+
+        // south (z = maxZ)
+        addVertex(buffer, entry, minX, minY, maxZ, r, g, b, a, 0, 0, 1);
+        addVertex(buffer, entry, maxX, minY, maxZ, r, g, b, a, 0, 0, 1);
+        addVertex(buffer, entry, maxX, maxY, maxZ, r, g, b, a, 0, 0, 1);
+        addVertex(buffer, entry, minX, maxY, maxZ, r, g, b, a, 0, 0, 1);
+
+        // west (x = minX)
+        addVertex(buffer, entry, minX, minY, minZ, r, g, b, a, -1, 0, 0);
+        addVertex(buffer, entry, minX, minY, maxZ, r, g, b, a, -1, 0, 0);
+        addVertex(buffer, entry, minX, maxY, maxZ, r, g, b, a, -1, 0, 0);
+        addVertex(buffer, entry, minX, maxY, minZ, r, g, b, a, -1, 0, 0);
+
+        // east (x = maxX)
+        addVertex(buffer, entry, maxX, minY, minZ, r, g, b, a, 1, 0, 0);
+        addVertex(buffer, entry, maxX, maxY, minZ, r, g, b, a, 1, 0, 0);
+        addVertex(buffer, entry, maxX, maxY, maxZ, r, g, b, a, 1, 0, 0);
+        addVertex(buffer, entry, maxX, minY, maxZ, r, g, b, a, 1, 0, 0);
+    }
+
+    @Unique
+    private void addVertex(VertexConsumer buffer, MatrixStack.Entry entry, float x, float y, float z,
+                           float r, float g, float b, float a, float normalX, float normalY, float normalZ) {
+        buffer.vertex(entry.getPositionMatrix(), x, y, z)
+                .color(r, g, b, a)
+                .normal(entry, normalX, normalY, normalZ);
     }
 }

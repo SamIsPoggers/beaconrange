@@ -13,7 +13,7 @@ public class ConfigScreenBuilder {
 
         ConfigBuilder builder = ConfigBuilder.create()
                 .setParentScreen(parent)
-                .setTitle(Text.literal("YourMod Config"));
+                .setTitle(Text.literal("Beacon Bounding Box Config"));
 
         builder.setSavingRunnable(ConfigManager::save); // Save to disk on exit
 
@@ -36,6 +36,14 @@ public class ConfigScreenBuilder {
                 .setMin(1)
                 .setMax(319)
                 .setSaveConsumer(newValue -> config.customYLevel = newValue)
+                .build());
+
+        //Enum for box mode
+        general.addEntry(entryBuilder
+                .startEnumSelector(Text.literal("Box Mode"), ModConfig.BoxMode.class,  config.boxMode)
+                .setDefaultValue(ModConfig.BoxMode.box)
+                .setTooltip(Text.literal("Choose how the bounding box looks."))
+                .setSaveConsumer(newValue -> config.boxMode = newValue)
                 .build());
 
         return builder.build();

@@ -7,6 +7,12 @@ public class ModConfig {
         custom
     }
 
+    public enum BoxMode{
+        outline,
+        box
+    }
+
     public HeightMode heightMode = HeightMode.radius;
     public int customYLevel = 100;
+    public BoxMode boxMode = BoxMode.box;
 }
