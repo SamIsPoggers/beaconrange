@@ -3,11 +3,17 @@ package io.github.samispoggers.beaconrange.mixin;
 import io.github.samispoggers.beaconrange.client.BeaconRangeClient;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+import net.minecraft.block.entity.BeaconBlockEntity;
+import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.ConduitBlockEntity;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.block.entity.ConduitBlockEntityRenderer;
+import net.minecraft.client.render.block.entity.state.ConduitBlockEntityRenderState;
+import net.minecraft.client.render.command.OrderedRenderCommandQueue;
+import net.minecraft.client.render.state.CameraRenderState;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
@@ -29,17 +35,27 @@ public class MixinConduitBlockEntityRenderer {
     @Unique
     private final Map<BlockPos, Vector3f> conduitColors = new HashMap<>();
 
-    @Inject(method = "render(Lnet/minecraft/block/entity/ConduitBlockEntity;FLnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumerProvider;IILnet/minecraft/util/math/Vec3d;)V", at = @At("HEAD"))
-    public void renderConduitBoxes(ConduitBlockEntity conduitBlockEntity, float f, MatrixStack matrixStack,
-                                   VertexConsumerProvider vertexConsumerProvider, int i, int j,
-                                   Vec3d vec3d, CallbackInfo ci) {
-        if (BeaconRangeClient.myToggleConduitVariable) {
-            renderBoundingBox(conduitBlockEntity, matrixStack, vertexConsumerProvider);
-        }
+    @Inject(method = "render(Lnet/minecraft/client/render/block/entity/state/ConduitBlockEntityRenderState;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;Lnet/minecraft/client/render/state/CameraRenderState;)V", at = @At("HEAD"))
+    public void renderConduitBoxes(
+            ConduitBlockEntityRenderState conduitBlockEntityRenderState,
+            MatrixStack matrixStack,
+            OrderedRenderCommandQueue orderedRenderCommandQueue,
+            CameraRenderState cameraRenderState,
+            CallbackInfo ci
+    ) {
+        if (!BeaconRangeClient.renderConduitBounds) return;
+
+        var world = MinecraftClient.getInstance().world;
+        if (world == null) return;
+
+        BlockEntity be = world.getBlockEntity(conduitBlockEntityRenderState.pos);
+        if (!(be instanceof ConduitBlockEntity conduit)) return;
+
+        renderBoundingBox(conduit, matrixStack, orderedRenderCommandQueue);
     }
 
     @Unique
-    private void renderBoundingBox(ConduitBlockEntity conduit, MatrixStack matrices, VertexConsumerProvider vertexConsumers) {
+    private void renderBoundingBox(ConduitBlockEntity conduit, MatrixStack matrices, OrderedRenderCommandQueue queue) {
         BlockPos blockPos = conduit.getPos();
 
         Vector3f color = conduitColors.computeIfAbsent(blockPos, p -> {
@@ -57,14 +73,15 @@ public class MixinConduitBlockEntityRenderer {
         Vec3d min = new Vec3d(-range, -range, -range);
         Vec3d max = new Vec3d(range + 1, range + 1, range + 1);
 
-        VertexConsumer buffer = vertexConsumers.getBuffer(RenderLayer.getLines());
-        drawSphereOutline(matrices, buffer, range, color.x(), color.y(), color.z(), 48);
+        queue.submitCustom(matrices, RenderLayer.getLines(), (entry, buffer) -> {
+            drawSphereOutline(entry, buffer, range, color.x(), color.y(), color.z(), 48);
+        });
     }
 
 
     @Unique
-    private void drawSphereOutline(MatrixStack matrices, VertexConsumer buffer, float radius, float r, float g, float b, int segments) {
-        MatrixStack.Entry entry = matrices.peek();
+    private void drawSphereOutline(MatrixStack.Entry entry, VertexConsumer buffer, float radius, float r, float g, float b, int segments) {
+
 
         // Horizontal ring (equator)
         for (int i = 0; i < segments; i++) {
