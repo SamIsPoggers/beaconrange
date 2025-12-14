@@ -7,14 +7,20 @@ import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
+import net.minecraft.util.Identifier;
 import org.lwjgl.glfw.GLFW;
 
 public class BeaconRangeClient implements ClientModInitializer {
 
     private static KeyBinding toggleBeaconKey;
     private static KeyBinding toggleConduitKey;
-    public static boolean myToggleBeaconVariable = false;
-    public static boolean myToggleConduitVariable = false;
+    public static boolean renderBeaconBounds = false;
+    public static boolean renderConduitBounds = false;
+
+    private final static KeyBinding.Category category =
+            KeyBinding.Category.create(
+                    Identifier.of("beaconrange", "main")
+            );
 
     @Override
     public void onInitializeClient() {
@@ -23,7 +29,7 @@ public class BeaconRangeClient implements ClientModInitializer {
                 "key.beaconrange.toggle_beacon",
                 InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_G,
-                "category.beaconrange"
+                category
         ));
 
         // Register the keybinding (e.g., key G)
@@ -31,18 +37,18 @@ public class BeaconRangeClient implements ClientModInitializer {
                 "key.beaconrange.toggle_conduit",
                 InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_H,
-                "category.beaconrange"
+                category
         ));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (toggleBeaconKey.wasPressed()) {
-                myToggleBeaconVariable = !myToggleBeaconVariable;
+                renderBeaconBounds = !renderBeaconBounds;
 
                 // Build the colored message
                 Text message = Text.literal("Beacon Bounding Boxes are now ")
                         .formatted(Formatting.GRAY)
-                        .append(Text.literal(myToggleBeaconVariable ? "ON" : "OFF")
-                                .formatted(myToggleBeaconVariable ? Formatting.GREEN : Formatting.RED)
+                        .append(Text.literal(renderBeaconBounds ? "ON" : "OFF")
+                                .formatted(renderBeaconBounds ? Formatting.GREEN : Formatting.RED)
                         );
 
                 // Send to action bar
@@ -52,13 +58,13 @@ public class BeaconRangeClient implements ClientModInitializer {
             }
 
             while (toggleConduitKey.wasPressed()) {
-                myToggleConduitVariable = !myToggleConduitVariable;
+                renderConduitBounds = !renderConduitBounds;
 
                 // Build the colored message
                 Text message = Text.literal("Conduit Bounding Boxes are now ")
                         .formatted(Formatting.GRAY)
-                        .append(Text.literal(myToggleConduitVariable ? "ON" : "OFF")
-                                .formatted(myToggleConduitVariable ? Formatting.GREEN : Formatting.RED)
+                        .append(Text.literal(renderConduitBounds ? "ON" : "OFF")
+                                .formatted(renderConduitBounds ? Formatting.GREEN : Formatting.RED)
                         );
 
                 // Send to action bar

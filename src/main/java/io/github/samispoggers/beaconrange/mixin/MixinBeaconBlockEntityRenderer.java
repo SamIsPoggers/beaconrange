@@ -9,9 +9,13 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.block.entity.BeaconBlockEntity;
 import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.render.*;
 import net.minecraft.client.render.block.entity.BeaconBlockEntityRenderer;
+import net.minecraft.client.render.block.entity.state.BeaconBlockEntityRenderState;
+import net.minecraft.client.render.command.OrderedRenderCommandQueue;
+import net.minecraft.client.render.state.CameraRenderState;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
@@ -56,17 +60,33 @@ public abstract class MixinBeaconBlockEntityRenderer {
     @Unique
     private final Map<BlockPos, Vector3f> beaconColors = new HashMap<>();
 
-    @Inject(method = "render(Lnet/minecraft/block/entity/BlockEntity;FLnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumerProvider;IILnet/minecraft/util/math/Vec3d;)V",
+    @Inject(method = "render(Lnet/minecraft/client/render/block/entity/state/BeaconBlockEntityRenderState;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;Lnet/minecraft/client/render/state/CameraRenderState;)V",
             at = @At("HEAD"))
-    private void onRenderBeacon(BlockEntity entity, float tickDelta, MatrixStack matrices,
-                                VertexConsumerProvider vertexConsumers, int light, int overlay, Vec3d cameraPos, CallbackInfo ci) {
-        if (entity instanceof BeaconBlockEntity beacon && BeaconRangeClient.myToggleBeaconVariable) {
-            renderBoundingBox(beacon, matrices, vertexConsumers);
-        }
+    private void onRenderBeacon(
+            BeaconBlockEntityRenderState beaconBlockEntityRenderState,
+            MatrixStack matrixStack,
+            OrderedRenderCommandQueue orderedRenderCommandQueue,
+            CameraRenderState cameraRenderState,
+            CallbackInfo ci
+    ) {
+        if (!BeaconRangeClient.renderBeaconBounds) return;
+
+        var world = MinecraftClient.getInstance().world;
+        if (world == null) return;
+
+        BlockEntity be = world.getBlockEntity(beaconBlockEntityRenderState.pos);
+        if (!(be instanceof BeaconBlockEntity beacon)) return;
+
+
+        renderBoundingBox(beacon, matrixStack, orderedRenderCommandQueue);
     }
 
     @Unique
-    private void renderBoundingBox(BeaconBlockEntity beacon, MatrixStack matrices, VertexConsumerProvider vertexConsumers) {
+    private void renderBoundingBox(
+            BeaconBlockEntity beacon,
+            MatrixStack matrices,
+            OrderedRenderCommandQueue queue
+    ) {
         BlockPos blockPos = beacon.getPos();
 
         // Deterministic color per beacon
@@ -84,14 +104,15 @@ public abstract class MixinBeaconBlockEntityRenderer {
         matrices.translate(0.5, 0.5, 0.5); // Center on the beacon block
 
         if (ConfigManager.config.boxMode.equals(ModConfig.BoxMode.box)) {
-            // First render translucent faces
-            VertexConsumer faceBuffer = vertexConsumers.getBuffer(TRANSLUCENT_BOX);
-            drawBoxFaces(matrices, faceBuffer, box, color.x(), color.y(), color.z(), 0.3f);
+            queue.submitCustom(matrices, TRANSLUCENT_BOX, (entry, consumer) ->
+                drawBoxFaces(entry, consumer, box, color.x(), color.y(), color.z(), 0.3f)
+            );
         }
 
         // Then render the outline on top
-        VertexConsumer lineBuffer = vertexConsumers.getBuffer(RenderLayer.getLines());
-        VertexRendering.drawBox(matrices, lineBuffer, box, color.x(), color.y(), color.z(), 1.0f);
+        queue.submitCustom(matrices, RenderLayer.getLines(), (entry, consumer) ->
+                VertexRendering.drawBox(entry, consumer, box, color.x(), color.y(), color.z(), 1.0f)
+        );
 
         matrices.pop();
     }
@@ -115,10 +136,8 @@ public abstract class MixinBeaconBlockEntityRenderer {
     }
 
     @Unique
-    private void drawBoxFaces(MatrixStack matrices, VertexConsumer buffer, Box box,
+    private void drawBoxFaces(MatrixStack.Entry entry, VertexConsumer buffer, Box box,
                               float r, float g, float b, float a) {
-        MatrixStack.Entry entry = matrices.peek();
-
         float minX = (float) box.minX;
         float minY = (float) box.minY;
         float minZ = (float) box.minZ;

@@ -1,5 +1,5 @@
 {
-  "category.beaconrange": "Beacon Bounding Boxes",
+  "category.beaconrange.main": "Beacon Bounding Boxes",
   "key.beaconrange.toggle_beacon": "Toggle Beacon Bounding Box",
   "key.beaconrange.toggle_conduit": "Toggle Conduit Bounding Box",
   "beaconrange.discord": "Discord"
