@@ -21,9 +21,15 @@ public class ConfigFileWrapper {
 
     public ModConfig toConfig() {
         ModConfig config = new ModConfig();
-        config.heightMode = this.heightMode;
-        config.boxMode  = this.boxMode;
+
+        if (this.heightMode != null)
+            config.heightMode = this.heightMode;
+
+        if (this.boxMode != null)
+            config.boxMode = this.boxMode;
+
         config.customYLevel = this.customYLevel;
+
         return config;
     }
 }

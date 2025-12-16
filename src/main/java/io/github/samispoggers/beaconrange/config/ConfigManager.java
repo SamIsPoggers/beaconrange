@@ -15,17 +15,28 @@ public class ConfigManager {
     public static ModConfig config = new ModConfig();
 
     public static void load() {
+        ConfigFileWrapper wrapper = null;
+
         if (Files.exists(CONFIG_PATH)) {
             try {
                 String json = Files.readString(CONFIG_PATH);
-                config = GSON.fromJson(json, ConfigFileWrapper.class).toConfig();
-            } catch (IOException e) {
-                System.err.println("[BeaconRange] Failed to load config: " + e);
+
+                if (!json.isBlank()) {
+                    wrapper = GSON.fromJson(json, ConfigFileWrapper.class);
+                }
+            } catch (Exception e) {
+                System.err.println("[BeaconRange] Failed to load config, regenerating: " + e);
             }
+        }
+
+        if (wrapper == null) {
+            config = new ModConfig();
+            save();
         } else {
-            save(); // Save default config
+            config = wrapper.toConfig();
         }
     }
+
 
     public static void save() {
         try {
