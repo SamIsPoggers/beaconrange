@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "beacon_bounding_boxes",
+  "version": "${version}",
+  "name": "Beacon Bounding Boxes",
+  "description": "Client-side mod to visualize beacon's effect range.",
+  "authors": [],
+  "contact": {},
+  "license": "All-Rights-Reserved",
+  "icon": "assets/beacon_bounding_boxes/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "client": [
+      "io.github.samispoggers.beacon_bounding_boxes.client.BeaconBoundingBoxesClient"
+    ],
+    "main": [
+      "io.github.samispoggers.beacon_bounding_boxes.BeaconBoundingBoxes"
+    ],
+    "modmenu": [
+      "io.github.samispoggers.beacon_bounding_boxes.compat.ModMenuCompat"
+    ]
+  },
+  "mixins": [
+    "beacon_bounding_boxes.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}",
+    "yet_another_config_lib_v3": ">=${yacl_version}"
+  }
+}

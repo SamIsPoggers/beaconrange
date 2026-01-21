@@ -1,0 +1,20 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "io.github.samispoggers.beacon_bounding_boxes.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "BeaconBlockEntityAccessor",
+    "ConduitBlockEntityAccessor"
+  ],
+  "client": [
+    "MixinBeaconRenderer",
+    "MixinConduitRenderer"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
+  }
+}
