@@ -45,7 +45,22 @@ $ModCacheDir = Join-Path $RuntimeDir 'mod-cache'
 $AssetsFallbackDir = Join-Path $RuntimeDir 'assets'
 $SavesSnapshotDir = Join-Path $RuntimeDir 'saves-snapshot-26.1'
 $SavesPreNeoForgeBackupDir = Join-Path $RuntimeDir 'saves-before-neoforge-26.1'
-$UniversalJarPath = Join-Path $RepoRoot 'build\libs\beacon-bounding-boxes-1.2+26.1-26.3.jar'
+
+$GradlePropsPath = Join-Path $RepoRoot 'gradle.properties'
+$GradleProps = @{}
+foreach ($propLine in (Get-Content -Path $GradlePropsPath -Encoding UTF8)) {
+    $trimmed = $propLine.Trim()
+    if (-not $trimmed -or $trimmed.StartsWith('#')) { continue }
+    $eqIdx = $trimmed.IndexOf('=')
+    if ($eqIdx -gt 0) {
+        $propKey = $trimmed.Substring(0, $eqIdx).Trim()
+        $propVal = $trimmed.Substring($eqIdx + 1).Trim()
+        $GradleProps[$propKey] = $propVal
+    }
+}
+$ModVersion = if ($GradleProps.ContainsKey('mod_version') -and $GradleProps['mod_version']) { $GradleProps['mod_version'] } else { throw "Missing mod_version in $GradlePropsPath" }
+$ArchivesBaseName = if ($GradleProps.ContainsKey('archives_base_name') -and $GradleProps['archives_base_name']) { $GradleProps['archives_base_name'] } else { throw "Missing archives_base_name in $GradlePropsPath" }
+$UniversalJarPath = Join-Path $RepoRoot "build\libs\${ArchivesBaseName}-${ModVersion}+26.1-26.3.jar"
 
 $Utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 
