@@ -1,0 +1,10 @@
+ext {
+    neoForgeVersion = '26.3.0.115'
+    // Upstream YACL 3.9.7+26.3-neoforge declares minecraft=[26.2,26.3); tests native FallbackConfigScreen
+    yaclVersion = ''
+    // 0.9.3-beta.1 fixes NeoForge 26.3.0.65+ LevelExtractorMixin (#3948) while remaining compatible with Iris 1.11.7
+    sodiumVersion = 'mc26.3-0.9.3-beta.1-neoforge'
+    irisVersion = '1.11.7+26.3-neoforge'
+}
+
+apply from: '../neoforge-runner.gradle'

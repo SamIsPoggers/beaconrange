@@ -1,0 +1,11 @@
+ext {
+    mcVersion = '26.3'
+    fabricLoaderVersion = '0.20.1'
+    fabricApiVersion = '0.167.0+26.3'
+    modMenuVersion = '21.0.1'
+    yaclVersion = '3.9.7+26.3-fabric'
+    sodiumVersion = 'mc26.3-0.9.2-fabric'
+    irisVersion = '1.11.7+26.3-fabric'
+}
+
+apply from: '../fabric-runner.gradle'

@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "id": "beacon_bounding_boxes",
+  "version": "${version}",
+  "name": "Beacon Bounding Boxes",
+  "description": "Client-side mod to visualize beacon and conduit effect ranges.",
+  "authors": [
+    "SamIsPoggers"
+  ],
+  "contact": {},
+  "license": "All-Rights-Reserved",
+  "icon": "assets/beacon_bounding_boxes/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "io.github.samispoggers.beacon_bounding_boxes.fabric.BeaconBoundingBoxesFabricClient"
+    ],
+    "modmenu": [
+      "io.github.samispoggers.beacon_bounding_boxes.fabric.compat.ModMenuCompat"
+    ]
+  },
+  "mixins": [
+    "beacon_bounding_boxes.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.18.4",
+    "fabric-api": "*",
+    "minecraft": ">=26.1 <=26.3",
+    "java": ">=25"
+  },
+  "suggests": {
+    "yet_another_config_lib_v3": ">=3.9.0",
+    "modmenu": ">=18.0.0"
+  },
+  "custom": {
+    "mc-publish": {
+      "loaders": [
+        "fabric",
+        "quilt",
+        "neoforge"
+      ]
+    }
+  }
+}

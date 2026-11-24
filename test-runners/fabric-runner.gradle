@@ -1,0 +1,169 @@
+apply plugin: 'java'
+apply plugin: 'net.fabricmc.fabric-loom'
+
+repositories {
+    mavenCentral()
+    maven {
+        name = 'Xander Maven'
+        url = 'https://maven.isxander.dev/releases'
+    }
+    maven {
+        name = 'TerraformersMC'
+        url = 'https://maven.terraformersmc.com/'
+    }
+    maven {
+        name = 'Modrinth'
+        url = 'https://api.modrinth.com/maven'
+        content {
+            includeGroup 'maven.modrinth'
+        }
+    }
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir rootProject.file('test-runners/shared-harness/common/src/main/java')
+            srcDir rootProject.file('test-runners/shared-harness/fabric/src/main/java')
+        }
+        resources {
+            srcDir rootProject.file('test-runners/shared-harness/fabric/src/main/resources')
+        }
+    }
+}
+
+configurations {
+    baseTestMods { transitive = false }
+    sodiumIrisMods { transitive = false }
+}
+
+def universalJarTask = rootProject.tasks.named('buildUniversalJar')
+
+dependencies {
+    minecraft "com.mojang:minecraft:${mcVersion}"
+    implementation "net.fabricmc:fabric-loader:${fabricLoaderVersion}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${fabricApiVersion}"
+
+    compileOnly files(universalJarTask.flatMap { it.archiveFile }) {
+        builtBy universalJarTask
+    }
+
+    baseTestMods "com.terraformersmc:modmenu:${modMenuVersion}"
+    if (project.hasProperty('yaclVersion') && yaclVersion) {
+        baseTestMods "dev.isxander:yet-another-config-lib:${yaclVersion}"
+    }
+
+    sodiumIrisMods "maven.modrinth:sodium:${sodiumVersion}"
+    sodiumIrisMods "maven.modrinth:iris:${irisVersion}"
+}
+
+loom {
+    runs {
+        client {
+            client()
+            runDir 'build/run'
+        }
+        clientSodiumIris {
+            client()
+            runDir 'build/run-compat'
+        }
+        selfTestClient {
+            client()
+            runDir 'build/run'
+            vmArg '-Djava.awt.headless=true'
+            vmArg '-Dbbb.selfTest=true'
+            vmArg '-Dbbb.expectedLoader=fabric'
+            vmArg '-Dbbb.selfTestOutput=../self-test-result.txt'
+            ideConfigGenerated = false
+        }
+        selfTestClientSodiumIris {
+            client()
+            runDir 'build/run-compat'
+            vmArg '-Djava.awt.headless=true'
+            vmArg '-Dbbb.selfTest=true'
+            vmArg '-Dbbb.expectedLoader=fabric'
+            vmArg '-Dbbb.expectSodiumIris=true'
+            vmArg '-Dbbb.selfTestOutput=../self-test-compat-result.txt'
+            ideConfigGenerated = false
+        }
+    }
+}
+
+tasks.register('prepareRunMods', Sync) {
+    dependsOn(universalJarTask)
+    from(universalJarTask.flatMap { it.archiveFile })
+    from(configurations.baseTestMods)
+    into(layout.buildDirectory.dir('run/mods'))
+}
+
+tasks.register('prepareCompatMods', Sync) {
+    dependsOn(universalJarTask)
+    from(universalJarTask.flatMap { it.archiveFile })
+    from(configurations.baseTestMods)
+    from(configurations.sodiumIrisMods)
+    into(layout.buildDirectory.dir('run-compat/mods'))
+}
+
+def verifyResult = { File resultFile, String label ->
+    if (!resultFile.exists()) {
+        throw new GradleException("${label} did not produce result file: ${resultFile}")
+    }
+    def text = resultFile.getText('UTF-8').trim()
+    if (!text.startsWith('PASS')) {
+        throw new GradleException("${label} failed:\n${text}")
+    }
+    logger.lifecycle("${label}: ${text}")
+}
+
+afterEvaluate {
+    tasks.named('runClient').configure {
+        dependsOn('prepareRunMods')
+    }
+    tasks.named('runClientSodiumIris').configure {
+        dependsOn('prepareCompatMods')
+    }
+    tasks.named('runSelfTestClient').configure {
+        dependsOn('prepareRunMods')
+        def outFile = layout.buildDirectory.file('self-test-result.txt').get().asFile
+        doFirst {
+            if (outFile.exists()) outFile.delete()
+        }
+        doLast {
+            verifyResult(outFile, "${project.name} self-test")
+        }
+    }
+    tasks.named('runSelfTestClientSodiumIris').configure {
+        dependsOn('prepareCompatMods')
+        def outFile = layout.buildDirectory.file('self-test-compat-result.txt').get().asFile
+        def sodiumCfg = layout.buildDirectory.file('run-compat/config/sodium-options.json').get().asFile
+        doFirst {
+            if (outFile.exists()) outFile.delete()
+            sodiumCfg.parentFile.mkdirs()
+            if (!sodiumCfg.exists()) {
+                sodiumCfg.setText('{\n  "performance": {\n    "use_no_error_g_l_context": false\n  }\n}\n', 'UTF-8')
+            } else {
+                def updated = sodiumCfg.getText('UTF-8').replaceAll(/"use_no_error_g_l_context"\s*:\s*true/, '"use_no_error_g_l_context": false')
+                sodiumCfg.setText(updated, 'UTF-8')
+            }
+        }
+        doLast {
+            verifyResult(outFile, "${project.name} Sodium+Iris self-test")
+        }
+    }
+}
+
+tasks.register('selfTestClient') {
+    group = 'verification'
+    dependsOn('runSelfTestClient')
+}
+
+tasks.register('selfTestClientSodiumIris') {
+    group = 'verification'
+    dependsOn('runSelfTestClientSodiumIris')
+}
+
+tasks.register('runClientInteractive') {
+    group = 'run'
+    def useCompat = (rootProject.findProperty('withSodiumIris') ?: 'false').toString().toBoolean()
+    dependsOn(useCompat ? 'runClientSodiumIris' : 'runClient')
+}

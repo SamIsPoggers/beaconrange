@@ -1,0 +1,22 @@
+modLoader = "javafml"
+loaderVersion = "[1,)"
+license = "MIT"
+
+[[mods]]
+modId = "bbb_self_test"
+version = "1.0.0"
+displayName = "BBB Self Test Harness"
+
+[[dependencies.bbb_self_test]]
+modId = "neoforge"
+type = "required"
+versionRange = "[26.1,26.4)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.bbb_self_test]]
+modId = "beacon_bounding_boxes"
+type = "required"
+versionRange = "[1.0,)"
+ordering = "AFTER"
+side = "CLIENT"

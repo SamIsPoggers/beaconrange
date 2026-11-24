@@ -1,0 +1,29 @@
+plugins {
+    id 'java-library'
+    id 'net.fabricmc.fabric-loom'
+}
+
+base {
+    archivesName = "${rootProject.property('archives_base_name')}-common"
+}
+
+repositories {
+    mavenCentral()
+    maven {
+        name = 'Xander Maven'
+        url = 'https://maven.isxander.dev/releases'
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${rootProject.property('compile_mc_version')}"
+    // Compile-only for Mixin annotations; common code must remain loader-agnostic
+    compileOnly "net.fabricmc:fabric-loader:${rootProject.property('compile_fabric_loader_version')}"
+    compileOnly "dev.isxander:yet-another-config-lib:${rootProject.property('compile_yacl_fabric_version')}"
+}
+
+loom {
+    runConfigs.configureEach {
+        ideConfigGenerated = false
+    }
+}

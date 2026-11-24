@@ -1,0 +1,63 @@
+plugins {
+    id 'java'
+    id 'net.fabricmc.fabric-loom'
+}
+
+version = "${rootProject.property('mod_version')}+26.1-26.3-fabric"
+
+base {
+    archivesName = rootProject.property('archives_base_name')
+}
+
+repositories {
+    maven {
+        name = 'Xander Maven'
+        url = 'https://maven.isxander.dev/releases'
+    }
+    maven {
+        name = 'TerraformersMC'
+        url = 'https://maven.terraformersmc.com/'
+    }
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir project(':common').file('src/main/java')
+        }
+        resources {
+            srcDir project(':common').file('src/main/resources')
+        }
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${rootProject.property('compile_mc_version')}"
+    implementation "net.fabricmc:fabric-loader:${rootProject.property('compile_fabric_loader_version')}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${rootProject.property('compile_fabric_api_version')}"
+
+    compileOnly "dev.isxander:yet-another-config-lib:${rootProject.property('compile_yacl_fabric_version')}"
+    compileOnly "com.terraformersmc:modmenu:${rootProject.property('compile_modmenu_version')}"
+}
+
+loom {
+    runConfigs.configureEach {
+        ideConfigGenerated = false
+    }
+}
+
+processResources {
+    def modVersionDisplay = "${rootProject.property('mod_version')}+26.1-26.3"
+    inputs.property 'version', modVersionDisplay
+    filteringCharset = 'UTF-8'
+
+    filesMatching('fabric.mod.json') {
+        expand(version: modVersionDisplay)
+    }
+}
+
+jar {
+    from(rootProject.file('LICENSE.txt')) {
+        rename { "LICENSE_${rootProject.property('archives_base_name')}.txt" }
+    }
+}

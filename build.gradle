@@ -1,102 +1,275 @@
+import groovy.json.JsonSlurper
+import org.gradle.jvm.tasks.Jar
+import java.util.jar.JarFile
+
 plugins {
-    id 'fabric-loom' version '1.15-SNAPSHOT'
-    id 'maven-publish'
+    id 'net.fabricmc.fabric-loom' version '1.19.4' apply false
+    id 'net.neoforged.moddev' version '2.0.148' apply false
 }
 
-version = project.mod_version
-group = project.maven_group
+def targetJavaVersion = 25
 
-base {
-    archivesName = project.archives_base_name
-}
+subprojects {
+    group = rootProject.property('maven_group')
+    version = rootProject.property('mod_version')
 
-
-repositories {
-    // Add repositories to retrieve artifacts from in here.
-    // You should only use this when depending on other mods because
-    // Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
-    // See https://docs.gradle.org/current/userguide/declaring_repositories.html
-    // for more information about repositories.
-    maven {
-        url "https://maven.isxander.dev/releases"
-        name "Xander Maven"
-    }
-    maven {
-        name "TerraformersMC"
-        url "https://maven.terraformersmc.com/"
-    }
-}
-
-dependencies {
-    // To change the versions see the gradle.properties file
-    minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings loom.officialMojangMappings()
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-
-    modImplementation "dev.isxander:yet-another-config-lib:${project.yacl_version}"
-
-    modImplementation "com.terraformersmc:modmenu:${project.modmenu_version}"
-}
-
-processResources {
-    inputs.property "version", project.version
-    inputs.property "minecraft_version", project.minecraft_version
-    inputs.property "loader_version", project.loader_version
-    filteringCharset "UTF-8"
-
-    filesMatching("fabric.mod.json") {
-        expand "version": project.version,
-                "minecraft_version": project.minecraft_version,
-                "loader_version": project.loader_version,
-                "yacl_version": project.yacl_version
-    }
-}
-
-def targetJavaVersion = 21
-tasks.withType(JavaCompile).configureEach {
-    // ensure that the encoding is set to UTF-8, no matter what the system default is
-    // this fixes some edge cases with special characters not displaying correctly
-    // see http://yodaconditions.net/blog/fix-for-java-file-encoding-problems-with-gradle.html
-    // If Javadoc is generated, this must be specified in that task too.
-    it.options.encoding = "UTF-8"
-    if (targetJavaVersion >= 10 || JavaVersion.current().isJava10Compatible()) {
-        it.options.release.set(targetJavaVersion)
-    }
-}
-
-java {
-    def javaVersion = JavaVersion.toVersion(targetJavaVersion)
-    if (JavaVersion.current() < javaVersion) {
-        toolchain.languageVersion = JavaLanguageVersion.of(targetJavaVersion)
-    }
-    // Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
-    // if it is present.
-    // If you remove this line, sources will not be generated.
-    withSourcesJar()
-}
-
-jar {
-    from("LICENSE") {
-        rename { "${it}_${project.archives_base_name}" }
-    }
-}
-
-// configure the maven publication
-publishing {
-    publications {
-        create("mavenJava", MavenPublication) {
-            artifactId = project.archives_base_name
-            from components.java
+    plugins.withType(JavaPlugin).configureEach {
+        java {
+            toolchain {
+                languageVersion = JavaLanguageVersion.of(targetJavaVersion)
+            }
+        }
+        tasks.withType(JavaCompile).configureEach {
+            options.encoding = 'UTF-8'
+            options.release.set(targetJavaVersion)
         }
     }
+}
 
-    // See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
-    repositories {
-        // Add repositories to publish to here.
-        // Notice: This block does NOT have the same function as the block in the top level.
-        // The repositories here will be used for publishing your artifact, not for
-        // retrieving dependencies.
+tasks.register('validateTranslations') {
+    group = 'verification'
+    description = 'Validates all language JSON files in common resources against en_us.json.'
+
+    def langDir = file('common/src/main/resources/assets/beacon_bounding_boxes/lang')
+    inputs.dir(langDir)
+
+    doLast {
+        def enFile = new File(langDir, 'en_us.json')
+        if (!enFile.exists()) {
+            throw new GradleException("Missing baseline translation file: ${enFile}")
+        }
+        def slurper = new JsonSlurper()
+        def enMap = slurper.parse(enFile, 'UTF-8') as Map<String, Object>
+        if (enMap.isEmpty()) {
+            throw new GradleException('en_us.json must not be empty')
+        }
+        def expectedKeys = enMap.keySet()
+        def placeholderKeys = expectedKeys.findAll { k -> String.valueOf(enMap[k]).contains('%s') }
+
+        def langFiles = langDir.listFiles({ dir, name -> name.endsWith('.json') } as FilenameFilter)
+        if (langFiles == null || langFiles.length < 2) {
+            throw new GradleException("Expected multiple translation files in ${langDir}")
+        }
+
+        langFiles.sort { it.name }.each { f ->
+            def parsed = slurper.parse(f, 'UTF-8')
+            if (!(parsed instanceof Map)) {
+                throw new GradleException("Translation file ${f.name} is not a JSON object")
+            }
+            def map = parsed as Map<String, Object>
+            def missing = expectedKeys - map.keySet()
+            def extra = map.keySet() - expectedKeys
+            if (!missing.isEmpty()) {
+                throw new GradleException("Translation ${f.name} is missing keys: ${missing}")
+            }
+            if (!extra.isEmpty()) {
+                throw new GradleException("Translation ${f.name} has unknown keys: ${extra}")
+            }
+            map.each { k, v ->
+                if (!(v instanceof String) || (v as String).trim().isEmpty()) {
+                    throw new GradleException("Translation ${f.name} has empty/non-string value for key '${k}'")
+                }
+            }
+            placeholderKeys.each { pk ->
+                if (!String.valueOf(map[pk]).contains('%s')) {
+                    throw new GradleException("Translation ${f.name} key '${pk}' must preserve '%s' placeholder")
+                }
+            }
+        }
+        logger.lifecycle("Validated ${langFiles.length} translation files (${expectedKeys.size()} keys each).")
     }
 }
+
+tasks.register('buildUniversalJar', Jar) {
+    group = 'build'
+    description = 'Validates translations and builds a single universal Fabric/Quilt/NeoForge jar for MC 26.1 - 26.3 into build/libs.'
+    dependsOn('validateTranslations', ':fabric:jar', ':neoforge:jar')
+
+    archiveBaseName.set(rootProject.property('archives_base_name').toString())
+    archiveVersion.set("${rootProject.property('mod_version')}+26.1-26.3")
+    destinationDirectory.set(layout.buildDirectory.dir('libs'))
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    def fabricJarTask = project(':fabric').tasks.named('jar')
+    def neoforgeJarTask = project(':neoforge').tasks.named('jar')
+
+    from(fabricJarTask.map { zipTree(it.archiveFile.get().asFile) }) {
+        exclude 'META-INF/MANIFEST.MF'
+    }
+    from(neoforgeJarTask.map { zipTree(it.archiveFile.get().asFile) }) {
+        include 'io/github/samispoggers/beacon_bounding_boxes/neoforge/**'
+        include 'META-INF/neoforge.mods.toml'
+    }
+
+    doFirst {
+        def fabricFile = fabricJarTask.get().archiveFile.get().asFile
+        new JarFile(fabricFile).withCloseable { jf ->
+            jf.manifest?.mainAttributes?.each { k, v ->
+                def key = k.toString()
+                if (key != 'Manifest-Version') {
+                    manifest.attributes[(key)] = v.toString()
+                }
+            }
+        }
+    }
+}
+
+tasks.register('buildAllJars') {
+    group = 'build'
+    description = 'Validates translations and builds the universal Fabric/Quilt/NeoForge jar into build/libs.'
+    dependsOn('buildUniversalJar')
+}
+
+def fabricVersions = ['26.1', '26.1.1', '26.1.2', '26.2', '26.3']
+def neoforgeVersions = ['26.1', '26.1.1', '26.1.2', '26.2', '26.3']
+
+def sanitize = { String ver -> ver.replace('.', '_') }
+
+def registerVersionTasks = { String loader, List<String> versions ->
+    def cap = loader == 'fabric' ? 'Fabric' : 'NeoForge'
+    def previousTest = null
+    def previousCompatTest = null
+    def testTasks = []
+    def compatTestTasks = []
+
+    versions.each { mcVer ->
+        def subPath = ":test-runners:${loader}-${mcVer}"
+        def suffix = sanitize(mcVer)
+
+        def tTest = tasks.register("test${cap}${suffix}") {
+            group = 'verification'
+            description = "Runs headless/client self-test for ${cap} ${mcVer}."
+            dependsOn("${subPath}:selfTestClient")
+        }
+        testTasks << tTest
+
+        def tCompat = tasks.register("testSodiumIris${cap}${suffix}") {
+            group = 'verification'
+            description = "Runs client self-test with Sodium & Iris for ${cap} ${mcVer}."
+            dependsOn("${subPath}:selfTestClientSodiumIris")
+        }
+        compatTestTasks << tCompat
+
+        tasks.register("run${cap}${suffix}") {
+            group = 'run'
+            description = "Launches interactive Minecraft client for ${cap} ${mcVer} (-PwithSodiumIris=true for Sodium+Iris)."
+            dependsOn("${subPath}:runClientInteractive")
+        }
+
+        def prevT = previousTest
+        def prevC = previousCompatTest
+        project(subPath).afterEvaluate { subProj ->
+            if (prevT != null) {
+                subProj.tasks.named('selfTestClient').configure { mustRunAfter(prevT) }
+            }
+            if (prevC != null) {
+                subProj.tasks.named('selfTestClientSodiumIris').configure { mustRunAfter(prevC) }
+            }
+        }
+        previousTest = "${subPath}:selfTestClient"
+        previousCompatTest = "${subPath}:selfTestClientSodiumIris"
+    }
+
+    tasks.register("testAll${cap}Versions") {
+        group = 'verification'
+        description = "Runs self-tests for every supported ${cap} version (26.1 - 26.3)."
+        dependsOn(testTasks)
+    }
+
+    tasks.register("testAll${cap}VersionsWithSodiumIris") {
+        group = 'verification'
+        description = "Runs Sodium + Iris self-tests for every supported ${cap} version (26.1 - 26.3)."
+        dependsOn(compatTestTasks)
+    }
+}
+
+registerVersionTasks('fabric', fabricVersions)
+registerVersionTasks('neoforge', neoforgeVersions)
+
+// Order NeoForge tests after Fabric tests when running everything together
+project(':test-runners:neoforge-26.1').afterEvaluate { subProj ->
+    subProj.tasks.named('selfTestClient').configure {
+        mustRunAfter(':test-runners:fabric-26.3:selfTestClient')
+    }
+    subProj.tasks.named('selfTestClientSodiumIris').configure {
+        mustRunAfter(':test-runners:fabric-26.3:selfTestClientSodiumIris')
+    }
+}
+
+tasks.register('testAllVersions') {
+    group = 'verification'
+    description = 'Builds universal jars and runs self-tests across every Fabric and NeoForge version (26.1 - 26.3).'
+    dependsOn('buildAllJars', 'testAllFabricVersions', 'testAllNeoForgeVersions')
+}
+
+tasks.register('testAllVersionsWithSodiumIris') {
+    group = 'verification'
+    description = 'Builds universal jars and runs Sodium + Iris self-tests across every Fabric and NeoForge version (26.1 - 26.3).'
+    dependsOn('buildAllJars', 'testAllFabricVersionsWithSodiumIris', 'testAllNeoForgeVersionsWithSodiumIris')
+}
+
+def registerPlaytestTask = { String taskName, String loaderArg, String desc, boolean setupOnlyDefault = false ->
+    tasks.register(taskName, Exec) {
+        group = 'playtest'
+        description = desc
+        dependsOn('buildUniversalJar')
+        workingDir = rootProject.projectDir
+        standardInput = System.in
+
+        doFirst {
+            def psArgs = [
+                'powershell',
+                '-NoProfile',
+                '-ExecutionPolicy', 'Bypass',
+                '-File', rootProject.file('scripts/playtest-all.ps1').absolutePath,
+                '-SkipBuild',
+                '-Loader', loaderArg
+            ]
+            if (setupOnlyDefault || (rootProject.findProperty('setupOnly') ?: 'false').toString().toBoolean()) {
+                psArgs << '-SetupOnly'
+            }
+            if ((rootProject.findProperty('noWorldReset') ?: 'false').toString().toBoolean()) {
+                psArgs << '-NoWorldReset'
+            }
+            def startAt = rootProject.findProperty('startAt')?.toString()
+            if (startAt) {
+                psArgs << '-StartAt' << startAt
+            }
+            def only = rootProject.findProperty('only')?.toString()
+            if (only) {
+                psArgs << '-Only' << only
+            }
+            def username = rootProject.findProperty('username')?.toString()
+            if (username) {
+                psArgs << '-Username' << username
+            }
+            def memory = rootProject.findProperty('memory')?.toString()
+            if (memory) {
+                psArgs << '-Memory' << memory
+            }
+            commandLine psArgs
+        }
+    }
+}
+
+registerPlaytestTask(
+    'preparePlaytest',
+    'all',
+    'Downloads and prepares non-dev Fabric & NeoForge runtimes (26.1 - 26.3), Sodium + Iris, potato shaders, and shared game dir.',
+    true
+)
+registerPlaytestTask(
+    'playtestAllVersions',
+    'all',
+    'Sequentially launches non-dev Fabric (26.1 - 26.3) then NeoForge (26.1 - 26.3) with universal JAR, Sodium, Iris & potato shaders.'
+)
+registerPlaytestTask(
+    'playtestFabricVersions',
+    'fabric',
+    'Sequentially launches non-dev Fabric (26.1 - 26.3) with universal JAR, Sodium, Iris & potato shaders.'
+)
+registerPlaytestTask(
+    'playtestNeoForgeVersions',
+    'neoforge',
+    'Sequentially launches non-dev NeoForge (26.1 - 26.3) with universal JAR, Sodium, Iris & potato shaders.'
+)

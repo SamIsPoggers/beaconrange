@@ -1,0 +1,154 @@
+apply plugin: 'java'
+apply plugin: 'net.neoforged.moddev'
+
+repositories {
+    mavenCentral()
+    maven {
+        name = 'Xander Maven'
+        url = 'https://maven.isxander.dev/releases'
+    }
+    maven {
+        name = 'Modrinth'
+        url = 'https://api.modrinth.com/maven'
+        content {
+            includeGroup 'maven.modrinth'
+        }
+    }
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir rootProject.file('test-runners/shared-harness/common/src/main/java')
+            srcDir rootProject.file('test-runners/shared-harness/neoforge/src/main/java')
+        }
+        resources {
+            srcDir rootProject.file('test-runners/shared-harness/neoforge/src/main/resources')
+        }
+    }
+}
+
+configurations {
+    baseTestMods { transitive = false }
+    sodiumIrisMods { transitive = false }
+}
+
+def universalJarTask = rootProject.tasks.named('buildUniversalJar')
+
+dependencies {
+    compileOnly files(universalJarTask.flatMap { it.archiveFile }) {
+        builtBy universalJarTask
+    }
+
+    if (project.hasProperty('yaclVersion') && yaclVersion) {
+        baseTestMods "dev.isxander:yet-another-config-lib:${yaclVersion}"
+    }
+
+    sodiumIrisMods "maven.modrinth:sodium:${sodiumVersion}"
+    sodiumIrisMods "maven.modrinth:iris:${irisVersion}"
+}
+
+tasks.register('prepareRunMods', Sync) {
+    dependsOn(universalJarTask)
+    from(universalJarTask.flatMap { it.archiveFile })
+    from(configurations.baseTestMods)
+    into(layout.buildDirectory.dir('run/mods'))
+}
+
+tasks.register('prepareCompatMods', Sync) {
+    dependsOn(universalJarTask)
+    from(universalJarTask.flatMap { it.archiveFile })
+    from(configurations.baseTestMods)
+    from(configurations.sodiumIrisMods)
+    into(layout.buildDirectory.dir('run-compat/mods'))
+}
+
+neoForge {
+    version = neoForgeVersion
+
+    mods {
+        bbb_self_test {
+            sourceSet sourceSets.main
+        }
+    }
+
+    runs {
+        client {
+            client()
+            gameDirectory = layout.buildDirectory.dir('run')
+            taskBefore(tasks.named('prepareRunMods'))
+        }
+        clientSodiumIris {
+            client()
+            gameDirectory = layout.buildDirectory.dir('run-compat')
+            taskBefore(tasks.named('prepareCompatMods'))
+        }
+        selfTestClient {
+            client()
+            gameDirectory = layout.buildDirectory.dir('run')
+            systemProperty 'bbb.selfTest', 'true'
+            systemProperty 'bbb.expectedLoader', 'neoforge'
+            systemProperty 'bbb.selfTestOutput', '../self-test-result.txt'
+            taskBefore(tasks.named('prepareRunMods'))
+            disableIdeRun()
+        }
+        selfTestClientSodiumIris {
+            client()
+            gameDirectory = layout.buildDirectory.dir('run-compat')
+            systemProperty 'bbb.selfTest', 'true'
+            systemProperty 'bbb.expectedLoader', 'neoforge'
+            systemProperty 'bbb.expectSodiumIris', 'true'
+            systemProperty 'bbb.selfTestOutput', '../self-test-compat-result.txt'
+            taskBefore(tasks.named('prepareCompatMods'))
+            disableIdeRun()
+        }
+    }
+}
+
+def verifyResult = { File resultFile, String label ->
+    if (!resultFile.exists()) {
+        throw new GradleException("${label} did not produce result file: ${resultFile}")
+    }
+    def text = resultFile.getText('UTF-8').trim()
+    if (!text.startsWith('PASS')) {
+        throw new GradleException("${label} failed:\n${text}")
+    }
+    logger.lifecycle("${label}: ${text}")
+}
+
+afterEvaluate {
+    tasks.named('runSelfTestClient').configure {
+        def outFile = layout.buildDirectory.file('self-test-result.txt').get().asFile
+        doFirst {
+            if (outFile.exists()) outFile.delete()
+        }
+        doLast {
+            verifyResult(outFile, "${project.name} self-test")
+        }
+    }
+    tasks.named('runSelfTestClientSodiumIris').configure {
+        def outFile = layout.buildDirectory.file('self-test-compat-result.txt').get().asFile
+        doFirst {
+            if (outFile.exists()) outFile.delete()
+        }
+        doLast {
+            verifyResult(outFile, "${project.name} Sodium+Iris self-test")
+        }
+    }
+}
+
+tasks.register('selfTestClient') {
+    group = 'verification'
+    dependsOn('runSelfTestClient')
+}
+
+tasks.register('selfTestClientSodiumIris') {
+    group = 'verification'
+    dependsOn('runSelfTestClientSodiumIris')
+}
+
+tasks.register('runClientInteractive') {
+    group = 'run'
+    def useCompat = (rootProject.findProperty('withSodiumIris') ?: 'false').toString().toBoolean()
+    dependsOn(useCompat ? 'runClientSodiumIris' : 'runClient')
+}

@@ -114,6 +114,19 @@ gradle-app.setting
 # Common working directory
 run/
 runs/
+**/run/
+**/run-compat/
+**/runs/
+**/logs/
+test-runners/**/usercache.json
+test-runners/**/options.txt
+test-runners/**/saves/
+test-runners/**/crash-reports/
+test-runners/**/config/
+
+# Local non-dev sequential playtest runtime & shared game dir
+playtest/
+*-installer.jar.log
 
 # Avoid ignoring Gradle wrapper jar file (.jar files are usually ignored)
 !gradle-wrapper.jar

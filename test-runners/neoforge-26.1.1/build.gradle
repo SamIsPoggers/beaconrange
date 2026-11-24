@@ -1,0 +1,8 @@
+ext {
+    neoForgeVersion = '26.1.1.15-beta'
+    yaclVersion = '3.9.7+26.1-neoforge'
+    sodiumVersion = 'mc26.1.1-0.8.9-neoforge'
+    irisVersion = '1.10.9+26.1-neoforge'
+}
+
+apply from: '../neoforge-runner.gradle'

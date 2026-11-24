@@ -1,0 +1,40 @@
+modLoader = "javafml"
+loaderVersion = "[1,)"
+license = "All-Rights-Reserved"
+
+[[mods]]
+modId = "beacon_bounding_boxes"
+version = "${version}"
+displayName = "Beacon Bounding Boxes"
+logoFile = "assets/beacon_bounding_boxes/icon.png"
+logoBlur = false
+iconFile = "assets/beacon_bounding_boxes/icon.png"
+iconBlur = false
+authors = "SamIsPoggers"
+description = '''
+Client-side mod to visualize beacon and conduit effect ranges.
+'''
+
+[[mixins]]
+config = "beacon_bounding_boxes.mixins.json"
+
+[[dependencies.beacon_bounding_boxes]]
+modId = "neoforge"
+type = "required"
+versionRange = "[26.1,26.4)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.beacon_bounding_boxes]]
+modId = "minecraft"
+type = "required"
+versionRange = "[26.1,26.3]"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.beacon_bounding_boxes]]
+modId = "yet_another_config_lib_v3"
+type = "optional"
+versionRange = "[3.9,)"
+ordering = "NONE"
+side = "CLIENT"

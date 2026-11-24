@@ -1,0 +1,58 @@
+plugins {
+    id 'java'
+    id 'net.neoforged.moddev'
+}
+
+version = "${rootProject.property('mod_version')}+26.1-26.3-neoforge"
+
+base {
+    archivesName = rootProject.property('archives_base_name')
+}
+
+repositories {
+    maven {
+        name = 'Xander Maven'
+        url = 'https://maven.isxander.dev/releases'
+    }
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir project(':common').file('src/main/java')
+        }
+        resources {
+            srcDir project(':common').file('src/main/resources')
+        }
+    }
+}
+
+neoForge {
+    version = rootProject.property('compile_neoforge_version')
+
+    mods {
+        "${rootProject.property('mod_id')}" {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+dependencies {
+    compileOnly "dev.isxander:yet-another-config-lib:${rootProject.property('compile_yacl_neoforge_version')}"
+}
+
+processResources {
+    def modVersionDisplay = "${rootProject.property('mod_version')}+26.1-26.3"
+    inputs.property 'version', modVersionDisplay
+    filteringCharset = 'UTF-8'
+
+    filesMatching('META-INF/neoforge.mods.toml') {
+        expand(version: modVersionDisplay)
+    }
+}
+
+jar {
+    from(rootProject.file('LICENSE.txt')) {
+        rename { "LICENSE_${rootProject.property('archives_base_name')}.txt" }
+    }
+}
